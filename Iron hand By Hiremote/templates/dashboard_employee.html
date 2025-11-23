@@ -1,0 +1,59 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section class="grid two-columns">
+  <div class="card span-2">
+    <h2>End-of-shift upload</h2>
+    <p>Upload the required media at the end of every shift. All files stay encrypted on the server and are shared with Iron Hand instantly.</p>
+    <form method="post" enctype="multipart/form-data" action="{{ url_for('upload_shift') }}" class="form-grid">
+      <label>
+        Scratcher Count Video
+        <input type="file" name="scratcher_video" accept="video/*" required>
+      </label>
+      <label>
+        Cash Count Photo
+        <input type="file" name="cash_photo" accept="image/*" required>
+      </label>
+      <label>
+        Sales Report Photo
+        <input type="file" name="sales_photo" accept="image/*" required>
+      </label>
+      <label class="span-2">
+        Shift notes <small>(optional)</small>
+        <textarea name="notes" rows="3" placeholder="Anything your manager should know?"></textarea>
+      </label>
+      <button type="submit" class="btn-primary span-2">Submit end-of-shift packet</button>
+    </form>
+  </div>
+
+  <div class="card">
+    <h3>Submission tips</h3>
+    <ul class="checklist">
+      <li>Use Wi-Fi for faster uploads.</li>
+      <li>Film scratcher count in landscape mode.</li>
+      <li>Place the cash tray on a dark backdrop.</li>
+      <li>Double-check totals before submitting.</li>
+    </ul>
+  </div>
+
+  <div class="card">
+    <h3>Recent shifts</h3>
+    {% if submissions %}
+      <ul class="submissions">
+        {% for submission in submissions %}
+          {% set payload = submission['payload']|load_payload %}
+          <li>
+            <strong>{{ submission['created_at'][:16].replace('T', ' ') }} UTC</strong>
+            <small>Files: {{ payload.get('files', [])|length }}</small>
+            {% if payload.get('notes') %}
+              <p>{{ payload.get('notes') }}</p>
+            {% endif %}
+          </li>
+        {% endfor %}
+      </ul>
+    {% else %}
+      <p>No uploads yet. Your next shift submission will appear here.</p>
+    {% endif %}
+  </div>
+</section>
+{% endblock %}

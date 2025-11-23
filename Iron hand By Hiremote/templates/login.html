@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+{% set app_name = "Hiremote Operations Portal" %}
+
+{% block content %}
+<section class="auth-card">
+  <h1>Welcome back</h1>
+  <p class="subtitle">Secure portal for Employees, Iron Hand managers, and Clients.</p>
+  <form method="post" class="form-grid">
+    <label>
+      Email
+      <input type="email" name="email" placeholder="you@hiremote.com" required>
+    </label>
+    <label>
+      Password
+      <input type="password" name="password" placeholder="••••••••" required>
+    </label>
+    <button type="submit" class="btn-primary">Sign in</button>
+  </form>
+  <div class="helper-text">
+    Demo accounts:<br>
+    Employee — employee@hiremote.com / password123<br>
+    Iron Hand — ironhand@hiremote.com / operations123<br>
+    Client — client@hiremote.com / clientaccess
+  </div>
+</section>
+{% endblock %}

@@ -1,0 +1,80 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section class="grid two-columns">
+  <div class="card span-2">
+    <h2>Share Iron Hand reports</h2>
+    <p>Use the form below for daily recaps, weekly orders, and monthly summaries. Clients get access instantly once you submit.</p>
+    <form method="post" action="{{ url_for('upload_report') }}" enctype="multipart/form-data" class="form-grid">
+      <label>
+        Report type
+        <select name="report_type" required>
+          <option value="daily">Daily report</option>
+          <option value="weekly">Weekly orders</option>
+          <option value="monthly">Monthly report</option>
+        </select>
+      </label>
+      <label class="span-2">
+        Summary / Weekly order list
+        <textarea name="summary" rows="4" placeholder="Managers and clients will see this text."></textarea>
+      </label>
+      <label>
+        Attachments <small>(optional)</small>
+        <input type="file" name="report_file" accept=".pdf,.doc,.docx,image/*,video/*,.txt">
+      </label>
+      <label class="span-2">
+        Notes <small>(optional, internal)</small>
+        <textarea name="notes" rows="2" placeholder="Log extra context for HQ"></textarea>
+      </label>
+      <button type="submit" class="btn-primary span-2">Send report</button>
+    </form>
+  </div>
+
+  <div class="card">
+    <h3>Quick metrics</h3>
+    <div class="stat-grid">
+      <div>
+        <small>Total submissions</small>
+        <strong>{{ reports|length }}</strong>
+      </div>
+      <div>
+        <small>Stores active</small>
+        <strong>{{ stores|length }}</strong>
+      </div>
+    </div>
+    <p class="helper-text">Need deeper insights? Head to the client view for filters and downloads.</p>
+  </div>
+
+  <div class="card">
+    <h3>Recent uploads</h3>
+    <div class="table">
+      <div class="table-row table-header">
+        <div>Store</div>
+        <div>Category</div>
+        <div>Employee</div>
+        <div>Created</div>
+        <div>Files</div>
+      </div>
+      {% for report in reports[:6] %}
+        {% set payload = report['payload']|load_payload %}
+        <div class="table-row">
+          <div>{{ report['store_number'] }}</div>
+          <div>{{ report['category']|capitalize }}</div>
+          <div>{{ report['employee_name'] }}</div>
+          <div>{{ report['created_at'][:16].replace('T', ' ') }}</div>
+          <div>
+            {% for file in payload.get('files', []) %}
+              <a href="{{ url_for('download_file', filename=file['stored_name']) }}">File {{ loop.index }}</a>
+            {% endfor %}
+          </div>
+        </div>
+      {% else %}
+        <div class="table-row">
+          <div colspan="5">No submissions yet.</div>
+        </div>
+      {% endfor %}
+    </div>
+    <a class="btn-link" href="{{ url_for('client_reports') }}">Open reporting workspace →</a>
+  </div>
+</section>
+{% endblock %}

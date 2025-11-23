@@ -1,0 +1,78 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section class="card">
+  <h2>Reporting workspace</h2>
+  <p>Filter every submission per store, employee, category, or date range. Click any tile to preview and download files.</p>
+  <form method="get" class="filter-grid">
+    <label>
+      Category
+      <select name="category">
+        <option value="">All</option>
+        <option value="shift" {{ 'selected' if filters.category == 'shift' }}>End of shift</option>
+        <option value="daily" {{ 'selected' if filters.category == 'daily' }}>Daily report</option>
+        <option value="weekly" {{ 'selected' if filters.category == 'weekly' }}>Weekly orders</option>
+        <option value="monthly" {{ 'selected' if filters.category == 'monthly' }}>Monthly report</option>
+      </select>
+    </label>
+    <label>
+      Employee
+      <input type="text" name="employee" value="{{ filters.employee }}" placeholder="Any employee">
+    </label>
+    <label>
+      Store #
+      <input type="text" name="store_number" value="{{ filters.store_number }}" {% if current_user['role'] == 'client' %}readonly{% endif %}>
+    </label>
+    <label>
+      Start date
+      <input type="datetime-local" name="start" value="{{ filters.start }}">
+    </label>
+    <label>
+      End date
+      <input type="datetime-local" name="end" value="{{ filters.end }}">
+    </label>
+    <button class="btn-primary">Apply filters</button>
+  </form>
+</section>
+
+<section class="gallery">
+  {% for submission in submissions %}
+    {% set payload = submission['payload']|load_payload %}
+    <article class="gallery-card">
+      <header>
+        <div class="badge">{{ submission['category']|capitalize }}</div>
+        <strong>{{ submission['employee_name'] }}</strong>
+        <small>Store {{ submission['store_number'] }} · {{ submission['created_at'][:16].replace('T',' ') }} UTC</small>
+      </header>
+      {% if payload.get('summary') %}
+        <p>{{ payload.get('summary') }}</p>
+      {% endif %}
+      {% if submission['notes'] %}
+        <p class="notes">Notes: {{ submission['notes'] }}</p>
+      {% endif %}
+      <div class="file-grid">
+        {% for file in payload.get('files', []) %}
+          <div class="file-preview">
+            {% if 'image' in (file['mime'] or '') %}
+              <img src="{{ url_for('download_file', filename=file['stored_name']) }}" alt="{{ file['original_name'] }}">
+            {% elif 'video' in (file['mime'] or '') %}
+              <video controls>
+                <source src="{{ url_for('download_file', filename=file['stored_name']) }}">
+              </video>
+            {% else %}
+              <div class="file-icon">
+                <span>{{ file['original_name'].split('.')[-1] | upper }}</span>
+              </div>
+            {% endif %}
+            <a class="btn-link" href="{{ url_for('download_file', filename=file['stored_name']) }}" download>Download</a>
+          </div>
+        {% endfor %}
+      </div>
+    </article>
+  {% else %}
+    <div class="empty-state">
+      <p>No submissions match your filters.</p>
+    </div>
+  {% endfor %}
+</section>
+{% endblock %}
