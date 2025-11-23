@@ -47,6 +47,12 @@ ROLE_IRONHAND = "ironhand"
 ROLE_CLIENT = "client"
 PASSWORD_METHOD = "pbkdf2:sha256"
 
+ROLE_LABELS = {
+    ROLE_EMPLOYEE: "Employee",
+    ROLE_IRONHAND: "Store Manager",
+    ROLE_CLIENT: "Client",
+}
+
 DEFAULT_USERS = [
     {
         "name": "Alex Employee",
@@ -290,6 +296,10 @@ def register_routes(app: Flask) -> None:
             return json.loads(payload)
         except json.JSONDecodeError:
             return {}
+
+    @app.template_filter("role_label")
+    def role_label(role: str) -> str:
+        return ROLE_LABELS.get(role, role.title())
 
     @app.context_processor
     def inject_globals():

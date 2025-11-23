@@ -4,7 +4,7 @@
 <section class="grid two-columns">
   <div class="card span-2">
     <h2>End-of-shift upload</h2>
-    <p>Upload the required media at the end of every shift. All files stay encrypted on the server and are shared with Iron Hand instantly.</p>
+    <p>Upload the required media at the end of every shift. All files stay encrypted on the server and are shared with the Store Manager instantly.</p>
     <form method="post" enctype="multipart/form-data" action="{{ url_for('upload_shift') }}" class="form-grid">
       <label>
         Scratcher Count Video
@@ -20,7 +20,7 @@
       </label>
       <label class="span-2">
         Shift notes <small>(optional)</small>
-        <textarea name="notes" rows="3" placeholder="Anything your manager should know?"></textarea>
+        <textarea name="notes" rows="3" placeholder="Anything your Store Manager should know?"></textarea>
       </label>
       <button type="submit" class="btn-primary span-2">Submit end-of-shift packet</button>
     </form>
