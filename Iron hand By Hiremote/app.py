@@ -3,15 +3,16 @@ from __future__ import annotations
 import json
 import os
 import sqlite3
-from datetime import datetime
+from datetime import datetime, timedelta
 from functools import wraps
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 
 from flask import (
     Flask,
     abort,
     flash,
+    jsonify,
     redirect,
     render_template,
     request,
@@ -21,6 +22,8 @@ from flask import (
 )
 from werkzeug.security import check_password_hash, generate_password_hash
 from werkzeug.utils import secure_filename
+from openai import OpenAI
+from supabase import Client, create_client
 
 
 APP_ROOT = Path(__file__).resolve().parent
@@ -49,6 +52,15 @@ ROLE_EMPLOYEE = "employee"
 ROLE_IRONHAND = "ironhand"
 ROLE_CLIENT = "client"
 PASSWORD_METHOD = "pbkdf2:sha256"
+AI_MODEL = os.environ.get("OPENAI_MODEL", "gpt-5-mini")
+AI_MAX_CONTEXT_ITEMS = int(os.environ.get("AI_MAX_CONTEXT_ITEMS", "6"))
+POS_DAILY_TABLE = os.environ.get("POS_DAILY_TABLE", "pos_daily_sales")
+POS_ITEM_TABLE = os.environ.get("POS_ITEM_TABLE", "pos_item_sales")
+POS_DATE_COLUMN = os.environ.get("POS_DATE_COLUMN", "business_date")
+POS_ITEM_DATE_COLUMN = os.environ.get("POS_ITEM_DATE_COLUMN", "business_date")
+
+_SUPABASE_CLIENT: Optional[Client] = None
+_OPENAI_CLIENT: Optional[OpenAI] = None
 
 DEFAULT_USERS = [
     {
@@ -191,6 +203,171 @@ def current_user() -> Optional[sqlite3.Row]:
     user = conn.execute("SELECT * FROM users WHERE id = ?", (user_id,)).fetchone()
     conn.close()
     return user
+
+
+def get_openai_client() -> Optional[OpenAI]:
+    global _OPENAI_CLIENT
+    if _OPENAI_CLIENT is not None:
+        return _OPENAI_CLIENT
+    api_key = os.environ.get("OPENAI_API_KEY")
+    if not api_key:
+        return None
+    _OPENAI_CLIENT = OpenAI(api_key=api_key)
+    return _OPENAI_CLIENT
+
+
+def get_supabase_client() -> Optional[Client]:
+    global _SUPABASE_CLIENT
+    if _SUPABASE_CLIENT is not None:
+        return _SUPABASE_CLIENT
+    url = os.environ.get("SUPABASE_URL")
+    key = os.environ.get("SUPABASE_SERVICE_ROLE_KEY")
+    if not url or not key:
+        return None
+    _SUPABASE_CLIENT = create_client(url, key)
+    return _SUPABASE_CLIENT
+
+
+def _safe_float(value: object) -> float:
+    try:
+        if value is None:
+            return 0.0
+        return float(value)
+    except (TypeError, ValueError):
+        return 0.0
+
+
+def _safe_int(value: object) -> int:
+    try:
+        if value is None:
+            return 0
+        return int(value)
+    except (TypeError, ValueError):
+        return 0
+
+
+def summarize_submissions(rows: List[sqlite3.Row]) -> List[Dict[str, Any]]:
+    summary = []
+    for row in rows:
+        summary.append(
+            {
+                "category": row["category"],
+                "report_type": row["report_type"],
+                "employee_name": row["employee_name"],
+                "store_number": row["store_number"],
+                "notes": (row["notes"] or "")[:200],
+                "created_at": row["created_at"],
+            }
+        )
+    return summary
+
+
+def load_pos_summary(store_id: str) -> Dict[str, Any]:
+    supabase = get_supabase_client()
+    if not supabase:
+        return {"status": "not_configured"}
+
+    start_date = (datetime.utcnow().date() - timedelta(days=30)).isoformat()
+    summary: Dict[str, Any] = {"status": "ok", "window_start": start_date}
+
+    try:
+        daily_rows = (
+            supabase.table(POS_DAILY_TABLE)
+            .select("*")
+            .eq("store_id", store_id)
+            .gte(POS_DATE_COLUMN, start_date)
+            .execute()
+            .data
+            or []
+        )
+    except Exception:
+        return {"status": "unavailable"}
+
+    total_gross = sum(_safe_float(row.get("gross_sales")) for row in daily_rows)
+    total_net = sum(_safe_float(row.get("net_sales")) for row in daily_rows)
+    total_txn = sum(_safe_int(row.get("transactions")) for row in daily_rows)
+    total_items = sum(_safe_int(row.get("items_sold")) for row in daily_rows)
+
+    summary.update(
+        {
+            "days": len(daily_rows),
+            "gross_sales": round(total_gross, 2),
+            "net_sales": round(total_net, 2),
+            "transactions": total_txn,
+            "items_sold": total_items,
+        }
+    )
+
+    try:
+        item_rows = (
+            supabase.table(POS_ITEM_TABLE)
+            .select("*")
+            .eq("store_id", store_id)
+            .gte(POS_ITEM_DATE_COLUMN, start_date)
+            .execute()
+            .data
+            or []
+        )
+    except Exception:
+        item_rows = []
+
+    item_totals: Dict[str, Dict[str, Any]] = {}
+    for row in item_rows:
+        name = row.get("item_name") or row.get("item_sku") or "Unknown item"
+        item_totals.setdefault(
+            name,
+            {
+                "item_name": name,
+                "quantity": 0,
+                "gross_sales": 0.0,
+            },
+        )
+        item_totals[name]["quantity"] += _safe_int(row.get("quantity"))
+        item_totals[name]["gross_sales"] += _safe_float(row.get("gross_sales"))
+
+    top_items = sorted(
+        item_totals.values(), key=lambda item: item["quantity"], reverse=True
+    )[:5]
+    if top_items:
+        summary["top_items"] = top_items
+
+    return summary
+
+
+def build_store_context(user: sqlite3.Row) -> Dict[str, Any]:
+    store_id = user["store_number"]
+    recent_rows = fetch_submissions(store=store_id)[:10]
+    activity_counts: Dict[str, int] = {}
+    for row in recent_rows:
+        activity_counts[row["category"]] = activity_counts.get(row["category"], 0) + 1
+
+    context: Dict[str, Any] = {
+        "store_id": store_id,
+        "generated_at": datetime.utcnow().isoformat(),
+        "recent_activity": summarize_submissions(recent_rows),
+        "activity_counts": activity_counts,
+    }
+
+    pos_summary = load_pos_summary(store_id)
+    context["pos_summary"] = pos_summary
+    return context
+
+
+def extract_output_text(response: object) -> str:
+    output_text = getattr(response, "output_text", None)
+    if output_text:
+        return output_text
+    try:
+        for item in getattr(response, "output", []):
+            if getattr(item, "type", "") != "message":
+                continue
+            for content in getattr(item, "content", []):
+                text = getattr(content, "text", None)
+                if text:
+                    return text
+    except Exception:
+        return ""
+    return ""
 
 
 def allowed_file(filename: str) -> bool:
@@ -444,6 +621,96 @@ def register_routes(app: Flask) -> None:
                 "end": end or "",
                 "store_number": store_number or "",
             },
+        )
+
+    @app.route("/api/assistant", methods=["POST"])
+    @login_required()
+    def assistant():
+        user = current_user()
+        if not user:
+            abort(403)
+
+        payload = request.get_json(silent=True) or {}
+        message = (payload.get("message") or "").strip()
+        if not message:
+            return jsonify({"error": "Message is required."}), 400
+
+        history = payload.get("history") or []
+        if not isinstance(history, list):
+            history = []
+
+        context = build_store_context(user)
+        client = get_openai_client()
+        if not client:
+            return (
+                jsonify(
+                    {
+                        "error": "OpenAI API key is not configured for this environment."
+                    }
+                ),
+                500,
+            )
+
+        system_prompt = (
+            "You are the Iron Hand store assistant. Answer only using the provided "
+            "store context. If the answer is not available, say you do not have that "
+            "data yet and suggest what data would be needed. Keep responses concise "
+            "and action-oriented."
+        )
+
+        messages: List[Dict[str, Any]] = [
+            {
+                "role": "system",
+                "content": [{"type": "input_text", "text": system_prompt}],
+            },
+            {
+                "role": "system",
+                "content": [
+                    {
+                        "type": "input_text",
+                        "text": f"Store context JSON:\n{json.dumps(context, default=str)}",
+                    }
+                ],
+            },
+        ]
+
+        for item in history[-AI_MAX_CONTEXT_ITEMS:]:
+            role = item.get("role")
+            content = (item.get("content") or "").strip()
+            if role not in {"user", "assistant"} or not content:
+                continue
+            messages.append(
+                {
+                    "role": role,
+                    "content": [{"type": "input_text", "text": content}],
+                }
+            )
+
+        messages.append(
+            {"role": "user", "content": [{"type": "input_text", "text": message}]}
+        )
+
+        try:
+            response = client.responses.create(
+                model=AI_MODEL,
+                input=messages,
+                metadata={
+                    "store_id": str(user["store_number"]),
+                    "user_id": str(user["id"]),
+                },
+            )
+        except Exception:
+            return jsonify({"error": "Assistant is temporarily unavailable."}), 502
+
+        reply = extract_output_text(response).strip()
+        if not reply:
+            reply = "I couldn't generate a response with the current data."
+
+        return jsonify(
+            {
+                "reply": reply,
+                "pos_status": context.get("pos_summary", {}).get("status"),
+            }
         )
 
     @app.route("/files/<path:filename>")

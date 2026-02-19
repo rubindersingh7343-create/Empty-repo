@@ -2,10 +2,11 @@
 <html lang="en">
   <head>
     <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
     <title>{{ app_name if app_name else 'Hiremote Operations Portal' }}</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
-    <script defer src="{{ url_for('static', filename='js/app.js') }}"></script>
+    {# cache-bust static assets so new CSS/JS reaches devices #}
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css', v=3) }}">
+    <script defer src="{{ url_for('static', filename='js/app.js', v=3) }}"></script>
   </head>
   <body>
     <header class="hero-bar">
@@ -49,5 +50,35 @@
       {% endwith %}
       {% block content %}{% endblock %}
     </main>
+
+    {% if current_user %}
+      <div class="bottom-bar">
+        <button id="assistant-toggle" class="assistant-toggle" aria-haspopup="dialog" aria-controls="assistant-modal">
+          <span class="assistant-icon">AI</span>
+          <span class="assistant-label">Assistant</span>
+        </button>
+      </div>
+
+      <div id="assistant-modal" class="assistant-modal" aria-hidden="true">
+        <div class="assistant-panel" role="dialog" aria-modal="true" aria-label="Store assistant">
+          <header class="assistant-header">
+            <div>
+              <h3>Store Assistant</h3>
+              <p>Ask about sales, reports, and store activity.</p>
+            </div>
+            <button id="assistant-close" class="assistant-close" type="button" aria-label="Close assistant">×</button>
+          </header>
+          <div id="assistant-messages" class="assistant-messages" aria-live="polite"></div>
+          <form id="assistant-form" class="assistant-form">
+            <input id="assistant-input" type="text" placeholder="Ask a question about this store..." autocomplete="off">
+            <button type="submit">Send</button>
+            <button type="button" id="assistant-voice" class="assistant-voice">Voice Off</button>
+          </form>
+          <div class="assistant-disclaimer">
+            Voice replies are AI-generated. Responses reflect available store data.
+          </div>
+        </div>
+      </div>
+    {% endif %}
   </body>
 </html>
