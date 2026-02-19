@@ -24,9 +24,12 @@ from werkzeug.utils import secure_filename
 
 
 APP_ROOT = Path(__file__).resolve().parent
-INSTANCE_PATH = APP_ROOT / "instance"
+# Vercel functions have a read-only filesystem; use /tmp for runtime storage.
+IS_VERCEL = os.environ.get("VERCEL") == "1"
+RUNTIME_ROOT = Path("/tmp/hiremote") if IS_VERCEL else APP_ROOT
+INSTANCE_PATH = RUNTIME_ROOT / "instance"
 DATABASE_PATH = INSTANCE_PATH / "hiremote.db"
-UPLOAD_ROOT = APP_ROOT / "storage" / "uploads"
+UPLOAD_ROOT = RUNTIME_ROOT / "storage" / "uploads"
 
 ALLOWED_EXTENSIONS = {
     "png",
