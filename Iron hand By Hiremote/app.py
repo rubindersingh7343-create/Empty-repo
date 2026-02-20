@@ -62,6 +62,12 @@ POS_ITEM_DATE_COLUMN = os.environ.get("POS_ITEM_DATE_COLUMN", "business_date")
 _SUPABASE_CLIENT: Optional[Client] = None
 _OPENAI_CLIENT: Optional[OpenAI] = None
 
+ROLE_LABELS = {
+    ROLE_EMPLOYEE: "Employee",
+    ROLE_IRONHAND: "Store Manager",
+    ROLE_CLIENT: "Client",
+}
+
 DEFAULT_USERS = [
     {
         "name": "Alex Employee",
@@ -470,6 +476,10 @@ def register_routes(app: Flask) -> None:
             return json.loads(payload)
         except json.JSONDecodeError:
             return {}
+
+    @app.template_filter("role_label")
+    def role_label(role: str) -> str:
+        return ROLE_LABELS.get(role, role.title())
 
     @app.context_processor
     def inject_globals():

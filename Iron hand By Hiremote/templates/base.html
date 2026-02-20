@@ -21,7 +21,7 @@
         {% if current_user %}
           <div class="user-chip">
             <span>{{ current_user['name'] }}</span>
-            <small>{{ current_user['role']|capitalize }} · Store {{ current_user['store_number'] }}</small>
+            <small>{{ current_user['role']|role_label }} · Store {{ current_user['store_number'] }}</small>
           </div>
         {% endif %}
       </div>

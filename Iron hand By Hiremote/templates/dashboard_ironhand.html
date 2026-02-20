@@ -3,7 +3,7 @@
 {% block content %}
 <section class="grid two-columns">
   <div class="card span-2">
-    <h2>Share Iron Hand reports</h2>
+    <h2>Store Manager Portal</h2>
     <p>Use the form below for daily recaps, weekly orders, and monthly summaries. Clients get access instantly once you submit.</p>
     <form method="post" action="{{ url_for('upload_report') }}" enctype="multipart/form-data" class="form-grid">
       <label>
@@ -16,7 +16,7 @@
       </label>
       <label class="span-2">
         Summary / Weekly order list
-        <textarea name="summary" rows="4" placeholder="Managers and clients will see this text."></textarea>
+        <textarea name="summary" rows="4" placeholder="Store Managers and clients will see this text."></textarea>
       </label>
       <label>
         Attachments <small>(optional)</small>
